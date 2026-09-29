@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     RETRIEVAL_TOP_K: int = Field(default=5, gt=0, le=20)
     HYBRID_SEMANTIC_WEIGHT: float = Field(default=0.6, ge=0)
     HYBRID_BM25_WEIGHT: float = Field(default=0.4, ge=0)
+    GEMINI_API_KEY: SecretStr | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TEMPERATURE: float = Field(default=0.1, ge=0, le=2)
+    GEMINI_MAX_OUTPUT_TOKENS: int = Field(default=2048, gt=0)
+    ANSWER_MAX_QUERY_LENGTH: int = Field(default=2000, gt=0)
+    ANSWER_DEFAULT_TOP_K: int = Field(default=5, gt=0)
+    ANSWER_MAX_TOP_K: int = Field(default=10, gt=0, le=20)
+    ANSWER_MAX_EVIDENCE_CHARS: int = Field(default=30000, gt=0)
 
     @field_validator("CHROMA_PERSIST_DIR", mode="after")
     @classmethod
@@ -44,6 +52,8 @@ class Settings(BaseSettings):
         total = self.HYBRID_SEMANTIC_WEIGHT + self.HYBRID_BM25_WEIGHT
         if abs(total - 1.0) > 1e-6:
             raise ValueError("Hybrid retrieval weights must sum to 1")
+        if self.ANSWER_DEFAULT_TOP_K > self.ANSWER_MAX_TOP_K:
+            raise ValueError("ANSWER_DEFAULT_TOP_K must not exceed ANSWER_MAX_TOP_K")
         return self
 
     model_config = SettingsConfigDict(

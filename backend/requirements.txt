@@ -11,3 +11,6 @@ pytest
 httpx
 pymupdf
 spacy
+sentence-transformers
+chromadb
+rank-bm25

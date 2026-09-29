@@ -108,8 +108,18 @@ class DocumentIntelligenceAgent:
         claimed = self.collection.update_one(
             {"_id": document["_id"], "status": {"$ne": "processing"}},
             {
-                "$set": {"status": "processing", "updated_at": now},
-                "$unset": {"processing_error": ""},
+                "$set": {
+                    "status": "processing",
+                    "retrieval_status": "not_indexed",
+                    "updated_at": now,
+                },
+                "$unset": {
+                    "processing_error": "",
+                    "indexed_at": "",
+                    "indexed_chunk_count": "",
+                    "embedding_model": "",
+                    "retrieval_error": "",
+                },
             },
         )
         if getattr(claimed, "matched_count", 1) == 0:
@@ -201,13 +211,20 @@ class DocumentIntelligenceAgent:
                 "$set": {
                     **result_data,
                     "status": "processed",
+                    "retrieval_status": "not_indexed",
                     "processed_artifacts": {
                         "text": artifacts.text_path,
                         "pages": artifacts.pages_path,
                     },
                     "updated_at": result.processed_at,
                 },
-                "$unset": {"processing_error": ""},
+                "$unset": {
+                    "processing_error": "",
+                    "indexed_at": "",
+                    "indexed_chunk_count": "",
+                    "embedding_model": "",
+                    "retrieval_error": "",
+                },
             },
         )
 

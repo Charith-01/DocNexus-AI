@@ -219,3 +219,16 @@ __marimo__/
 
 data/raw/
 data/selected/
+
+# DocNexus local configuration and generated frontend files
+backend/.env
+backend/.venv/
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+
+# Runtime storage (keep the tracked directory placeholders)
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/chroma/*
+!storage/chroma/.gitkeep

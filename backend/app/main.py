@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 from starlette.requests import Request
 
-from app.api import auth, documents, orchestrator, system
+from app.api import auth, documents, intelligence, orchestrator, system
 from app.core.config import settings
 from app.db.mongodb import close_database, create_indexes
 
@@ -58,4 +58,5 @@ async def mongodb_error_handler(_: Request, __: PyMongoError) -> JSONResponse:
 app.include_router(system.router)
 app.include_router(auth.router)
 app.include_router(documents.router)
+app.include_router(intelligence.router)
 app.include_router(orchestrator.router)

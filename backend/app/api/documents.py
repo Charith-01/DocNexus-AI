@@ -9,6 +9,7 @@ from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 
 from app.auth.authorization import can_access_document
+from app.agents.retrieval.agent import information_retrieval_agent
 from app.auth.dependencies import get_current_user
 from app.db.mongodb import document_permissions_collection, documents_collection
 from app.schemas.documents import DocumentListResponse, DocumentResponse, UploadResponse
@@ -81,6 +82,7 @@ async def upload_document(
         "mime_type": stored.mime_type,
         "sha256": stored.sha256,
         "status": "uploaded",
+        "retrieval_status": "not_indexed",
         "metadata": {},
         "created_at": now,
         "updated_at": now,
@@ -143,9 +145,16 @@ def delete_document(
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Stored document path is invalid") from exc
 
+    try:
+        information_retrieval_agent.cleanup_deleted_document(document_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Document index cleanup failed; document was not deleted",
+        ) from exc
+
     documents_collection.delete_one({"_id": document["_id"], "owner_id": current_user["_id"]})
     document_permissions_collection.delete_many({"document_id": document["_id"]})
     Path(stored_path).unlink(missing_ok=True)
 
-    # TODO(Member 3): notify vector storage cleanup after retrieval integration exists.
     return Response(status_code=status.HTTP_204_NO_CONTENT)

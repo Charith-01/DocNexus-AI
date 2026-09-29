@@ -232,3 +232,5 @@ storage/uploads/*
 !storage/uploads/.gitkeep
 storage/chroma/*
 !storage/chroma/.gitkeep
+storage/processed/*
+!storage/processed/.gitkeep

@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+pymongo
+pydantic-settings
+python-dotenv
+python-multipart
+pwdlib[argon2]
+PyJWT
+email-validator
+pytest
+httpx
+pymupdf
+spacy
+sentence-transformers
+chromadb
+rank-bm25
+google-genai

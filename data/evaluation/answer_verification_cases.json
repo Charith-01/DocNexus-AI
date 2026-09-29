@@ -1,0 +1,4 @@
+{
+  "description": "Template for manually labeled grounded-QA cases. No ground truth or benchmark scores have been invented.",
+  "cases": []
+}

@@ -1,2 +1,11 @@
 fastapi
 uvicorn[standard]
+pymongo
+pydantic-settings
+python-dotenv
+python-multipart
+pwdlib[argon2]
+PyJWT
+email-validator
+pytest
+httpx

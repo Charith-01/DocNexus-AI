@@ -1,7 +1,22 @@
+/**
+ * Dashboard — primary workspace for authenticated users.
+ *
+ * Composes:
+ *   - UploadPanel   (PDF upload with states)
+ *   - DocumentList  (document cards + process/view/delete)
+ *
+ * The orchestrator query router section is preserved below the document list
+ * for backward compatibility and will be expanded in later prompts.
+ *
+ * Do NOT add retrieval search, Q&A chat, or orchestrator execute here yet.
+ */
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../services/api";
-import type { DocumentRecord, RouteResult, User } from "../types/api";
+import type { DocumentResponse, OrchestratorRouteResponse, User } from "../types/api";
+import { DocumentList } from "../components/DocumentList";
+import { UploadPanel } from "../components/UploadPanel";
 
 interface DashboardProps {
   user: User;
@@ -9,19 +24,29 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [documents, setDocuments] = useState<DocumentResponse[]>([]);
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [listError, setListError] = useState("");
+
+  // Orchestrator preview state (existing feature — preserved)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  const [route, setRoute] = useState<RouteResult | null>(null);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [route, setRoute] = useState<OrchestratorRouteResponse | null>(null);
+  const [routeError, setRouteError] = useState("");
 
+  // ── Load document list ─────────────────────────────────────────────────────
   const loadDocuments = useCallback(async () => {
+    setListError("");
+    setDocsLoading(true);
     try {
       const result = await api.listDocuments();
       setDocuments(result.documents);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load documents");
+    } catch (err) {
+      setListError(
+        err instanceof Error ? err.message : "Could not load documents.",
+      );
+    } finally {
+      setDocsLoading(false);
     }
   }, []);
 
@@ -29,43 +54,35 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     void loadDocuments();
   }, [loadDocuments]);
 
-  const upload = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const input = event.currentTarget.elements.namedItem("pdf") as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    setMessage("");
+  // ── Refresh a single document record after processing ──────────────────────
+  const handleDocumentUpdated = useCallback(async (documentId: string) => {
     try {
-      await api.uploadDocument(file);
-      input.value = "";
-      setMessage("PDF uploaded successfully.");
-      await loadDocuments();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setBusy(false);
+      const updated = await api.getDocument(documentId);
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === documentId ? updated : d)),
+      );
+    } catch {
+      // Silently fall back to a full list refresh if single fetch fails
+      void loadDocuments();
     }
-  };
+  }, [loadDocuments]);
 
-  const remove = async (documentId: string) => {
-    setMessage("");
-    try {
-      await api.deleteDocument(documentId);
-      setSelectedIds((ids) => ids.filter((id) => id !== documentId));
-      await loadDocuments();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Delete failed");
-    }
-  };
+  // ── Remove a document from state after delete ──────────────────────────────
+  const handleDeleted = useCallback((documentId: string) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+    setSelectedIds((prev) => prev.filter((id) => id !== documentId));
+  }, []);
 
+  // ── Orchestrator route preview ─────────────────────────────────────────────
   const submitQuery = async (event: FormEvent) => {
     event.preventDefault();
-    setMessage("");
+    setRouteError("");
     try {
       setRoute(await api.routeQuery(query, selectedIds));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Routing failed");
+    } catch (err) {
+      setRouteError(
+        err instanceof Error ? err.message : "Routing failed.",
+      );
     }
   };
 
@@ -77,68 +94,88 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
   return (
     <main className="dashboard">
-      <header>
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <header className="dashboard__header">
         <div>
           <p className="eyebrow">DocNexus AI</p>
-          <h1>Document workspace</h1>
+          <h1>Document Workspace</h1>
           <p className="muted">Signed in as {user.email}</p>
         </div>
-        <button className="secondary" onClick={onLogout}>Logout</button>
+        <button className="secondary" onClick={onLogout}>
+          Logout
+        </button>
       </header>
 
-      {message && <p className="notice">{message}</p>}
+      {/* ── Global list-level error ──────────────────────────────────────── */}
+      {listError && (
+        <p className="notice notice--error" role="alert">
+          {listError}
+        </p>
+      )}
 
-      <section className="panel">
-        <h2>Upload a PDF</h2>
-        <form className="upload-row" onSubmit={upload}>
-          <input name="pdf" type="file" accept="application/pdf,.pdf" required />
-          <button disabled={busy}>{busy ? "Uploading…" : "Upload"}</button>
-        </form>
-      </section>
+      {/* ── Upload ──────────────────────────────────────────────────────── */}
+      <UploadPanel onUploaded={loadDocuments} />
 
-      <section className="panel">
-        <h2>Your documents</h2>
-        {documents.length === 0 ? (
-          <p className="muted">No documents uploaded yet.</p>
-        ) : (
-          <ul className="document-list">
-            {documents.map((document) => (
-              <li key={document.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(document.id)}
-                    onChange={() => toggleDocument(document.id)}
-                  />
-                  <span>
-                    <strong>{document.original_filename}</strong>
-                    <small>{Math.ceil(document.file_size / 1024)} KB · {document.status}</small>
-                  </span>
-                </label>
-                <button className="danger" onClick={() => void remove(document.id)}>Delete</button>
-              </li>
+      {/* ── Document list ────────────────────────────────────────────────── */}
+      <DocumentList
+        documents={documents}
+        loading={docsLoading}
+        onDeleted={handleDeleted}
+        onDocumentUpdated={handleDocumentUpdated}
+      />
+
+      {/* ── Orchestrator query router preview (preserved) ────────────────── */}
+      <section className="panel" aria-labelledby="router-heading">
+        <h2 id="router-heading">AI Query Router</h2>
+        <p className="muted">
+          Select documents above, then preview which agent will handle your
+          request. Full execution coming in a later update.
+        </p>
+
+        {/* Document selector for router */}
+        {documents.length > 0 && (
+          <div className="router-doc-selector">
+            {documents.map((doc) => (
+              <label key={doc.id} className="router-doc-label">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(doc.id)}
+                  onChange={() => toggleDocument(doc.id)}
+                />
+                <span>{doc.original_filename}</span>
+              </label>
             ))}
-          </ul>
+          </div>
         )}
-      </section>
 
-      <section className="panel">
-        <h2>AI query router</h2>
-        <p className="muted">Select relevant documents above, then preview which agent will handle your request.</p>
-        <form onSubmit={submitQuery}>
+        <form onSubmit={submitQuery} style={{ marginTop: "1rem" }}>
+          <label htmlFor="router-query">Query</label>
           <textarea
+            id="router-query"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="What does this agreement say about termination?"
             required
           />
-          <button>Route query</button>
+          <button type="submit">Route Query</button>
         </form>
+
+        {routeError && (
+          <p className="notice notice--error" role="alert">
+            {routeError}
+          </p>
+        )}
+
         {route && (
           <div className="route-result">
-            <strong>Intent:</strong> {route.intent}<br />
-            <strong>Target:</strong> {route.target_agent}<br />
-            <strong>Next steps:</strong> {route.next_steps.join(" → ") || "None"}
+            <strong>Intent:</strong> {route.intent}
+            <br />
+            <strong>Target Agent:</strong> {route.target_agent}
+            <br />
+            <strong>Next Steps:</strong>{" "}
+            {route.next_steps.length > 0
+              ? route.next_steps.join(" → ")
+              : "None"}
           </div>
         )}
       </section>
